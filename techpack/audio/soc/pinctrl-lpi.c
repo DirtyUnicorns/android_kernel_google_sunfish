@@ -477,25 +477,15 @@ static void lpi_gpio_dbg_show_one(struct seq_file *s,
 	seq_printf(s, " %s", pulls[pull]);
 }
 
-static bool lpi_gpio_is_ignored(struct gpio_chip *chip, unsigned int gpio)
-{
-	int i;
-	for (i = 0; i < chip->ignored_gpios_nr; i++) {
-		if (gpio == chip->ignored_gpios[i])
-			return true;
-	}
-
-	return false;
-}
-
 static void lpi_gpio_dbg_show(struct seq_file *s, struct gpio_chip *chip)
 {
 	unsigned int gpio = chip->base;
 	unsigned int i;
 
 	for (i = 0; i < chip->ngpio; i++, gpio++) {
-		if (lpi_gpio_is_ignored(chip, i))
-			continue;
+#ifdef CONFIG_MACH_XIAOMI_SDMMAGPIE
+		if (i < 8 || (i > 11 && i < 18)) continue;
+#endif
 		lpi_gpio_dbg_show_one(s, NULL, chip, i, gpio);
 		seq_puts(s, "\n");
 	}
@@ -544,7 +534,6 @@ static int lpi_pinctrl_probe(struct platform_device *pdev)
 	int ret, npins, i;
 	char __iomem *lpi_base;
 	u32 reg;
-	int ignored_gpios_nr;
 
 	ret = of_property_read_u32(dev->of_node, "reg", &reg);
 	if (ret < 0) {
@@ -629,21 +618,6 @@ static int lpi_pinctrl_probe(struct platform_device *pdev)
 		goto err_chip;
 	}
 
-	ignored_gpios_nr = of_property_count_u32_elems(state->chip.of_node,
-                "goog,ignored-gpios");
-	if (ignored_gpios_nr > 0) {
-		state->chip.ignored_gpios = kmalloc_array(ignored_gpios_nr,
-			sizeof(*state->chip.ignored_gpios), GFP_KERNEL);
-		if (!state->chip.ignored_gpios) {
-			ret = -ENOMEM;
-			goto err_no_read_gpios;
-		}
-		of_property_read_u32_array(state->chip.of_node, "goog,ignored-gpios",
-			state->chip.ignored_gpios,
-			ignored_gpios_nr);
-		state->chip.ignored_gpios_nr = ignored_gpios_nr;
-	}
-
 	ret = gpiochip_add_pin_range(&state->chip, dev_name(dev), 0, 0, npins);
 	if (ret) {
 		dev_err(dev, "failed to add pin range\n");
@@ -686,7 +660,6 @@ static int lpi_pinctrl_probe(struct platform_device *pdev)
 err_snd_evt:
 	audio_notifier_deregister("lpi_tlmm");
 err_range:
-err_no_read_gpios:
 	gpiochip_remove(&state->chip);
 err_chip:
 	return ret;
@@ -700,7 +673,6 @@ static int lpi_pinctrl_remove(struct platform_device *pdev)
 
 	snd_event_client_deregister(&pdev->dev);
 	audio_notifier_deregister("lpi_tlmm");
-	kfree(state->chip.ignored_gpios);
 	gpiochip_remove(&state->chip);
 	return 0;
 }
@@ -809,7 +781,17 @@ static struct platform_driver lpi_pinctrl_driver = {
 	.remove = lpi_pinctrl_remove,
 };
 
-module_platform_driver(lpi_pinctrl_driver);
+static int __init lpi_init(void)
+{
+	return platform_driver_register(&lpi_pinctrl_driver);
+}
+late_initcall(lpi_init);
+
+static void __exit lpi_exit(void)
+{
+	platform_driver_unregister(&lpi_pinctrl_driver);
+}
+module_exit(lpi_exit);
 
 MODULE_DESCRIPTION("QTI LPI GPIO pin control driver");
 MODULE_LICENSE("GPL v2");
