@@ -11082,7 +11082,7 @@ void csr_roam_joined_state_msg_processor(tpAniSirGlobal pMac, void *pMsgBuf)
 		roam_info->ampdu = pUpperLayerAssocCnf->ampdu;
 		roam_info->sgi_enable = pUpperLayerAssocCnf->sgi_enable;
 		roam_info->tx_stbc = pUpperLayerAssocCnf->tx_stbc;
-		roam_info->rx_stbc = pUpperLayerAssocCnf->rx_stbc;
+		roam_info->tx_stbc = pUpperLayerAssocCnf->rx_stbc;
 		roam_info->ch_width = pUpperLayerAssocCnf->ch_width;
 		roam_info->mode = pUpperLayerAssocCnf->mode;
 		roam_info->max_supp_idx = pUpperLayerAssocCnf->max_supp_idx;
@@ -17332,8 +17332,11 @@ QDF_STATUS csr_send_mb_start_bss_req_msg(tpAniSirGlobal pMac, uint32_t
 	pMsg->vht_config.su_beam_formee =
 		(uint8_t)value &&
 		(uint8_t)pMac->roam.configParam.enable_txbf_sap_mode;
-
-	value = WNI_CFG_VHT_CSN_BEAMFORMEE_ANT_SUPPORTED_FW_DEF;
+	if (wlan_cfg_get_int(pMac,
+			WNI_CFG_VHT_CSN_BEAMFORMEE_ANT_SUPPORTED,
+			&value) != QDF_STATUS_SUCCESS)
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+				("Failed to get CSN beamformee capability"));
 	pMsg->vht_config.csnof_beamformer_antSup = (uint8_t)value;
 	pMsg->vht_config.mu_beam_formee = 0;
 
@@ -17469,13 +17472,7 @@ static void csr_store_oce_cfg_flags_in_vdev(tpAniSirGlobal pMac,
 		sme_err("vdev is NULL");
 		return;
 	}
-
 	vdev_mlme = wlan_vdev_mlme_get_priv_obj(vdev);
-	if (!vdev_mlme) {
-		sme_err("vdev_mlme is NULL");
-		wlan_objmgr_vdev_release_ref(vdev, WLAN_LEGACY_MAC_ID);
-		return;
-	}
 
 	vdev_mlme->sta_dynamic_oce_value =
 	pMac->roam.configParam.oce_feature_bitmap;
@@ -20542,9 +20539,11 @@ csr_roam_offload_scan(tpAniSirGlobal mac_ctx, uint8_t session_id,
 	 * 11k offload is enabled during RSO Start after connect indication and
 	 * 11k offload is disabled during RSO Stop after disconnect indication
 	 */
-	if (command == ROAM_SCAN_OFFLOAD_START)
+	if (command == ROAM_SCAN_OFFLOAD_START &&
+	    reason == REASON_CTX_INIT)
 		csr_update_11k_offload_params(mac_ctx, session, req_buf, TRUE);
-	else if (command == ROAM_SCAN_OFFLOAD_STOP)
+	else if (command == ROAM_SCAN_OFFLOAD_STOP &&
+		 reason == REASON_DISCONNECTED)
 		csr_update_11k_offload_params(mac_ctx, session, req_buf, FALSE);
 
 	QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_DEBUG,

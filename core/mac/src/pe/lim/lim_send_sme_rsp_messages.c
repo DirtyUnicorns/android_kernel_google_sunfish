@@ -2178,7 +2178,7 @@ void lim_handle_csa_offload_msg(tpAniSirGlobal mac_ctx,
 
 	/* Send RSO Stop to FW before triggering the vdev restart for CSA */
 	if (mac_ctx->lim.stop_roaming_callback)
-		mac_ctx->lim.stop_roaming_callback(mac_ctx,
+		mac_ctx->lim.stop_roaming_callback(MAC_HANDLE(mac_ctx),
 						   session_entry->smeSessionId,
 						   ecsr_driver_disabled);
 
@@ -2323,6 +2323,9 @@ lim_send_sme_ap_channel_switch_resp(tpAniSirGlobal pMac,
 	bool is_ch_dfs = false;
 	enum phy_ch_width ch_width;
 	uint8_t ch_center_freq_seg1;
+
+	qdf_runtime_pm_allow_suspend(&psessionEntry->ap_ecsa_runtime_lock);
+	qdf_wake_lock_release(&psessionEntry->ap_ecsa_wakelock, 0);
 
 	pSmeSwithChnlParams = (tSwitchChannelParams *)
 			      qdf_mem_malloc(sizeof(tSwitchChannelParams));

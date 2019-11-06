@@ -299,7 +299,7 @@ enum hdd_dot11_mode {
  * gChannelBondingMode24GHz - Configures Channel Bonding in 24 GHz
  * @Min: 0
  * @Max: 10
- * @Default: 1
+ * @Default: 0
  *
  * This ini is used to set default channel bonding mode 24GHZ
  *
@@ -9988,7 +9988,6 @@ enum dot11p_mode {
 #define CFG_SET_TSF_PTP_OPT_TX                    (0x2)
 #define CFG_SET_TSF_PTP_OPT_RAW                   (0x4)
 #define CFG_SET_TSF_DBG_FS                        (0x8)
-#define CFG_SET_TSF_PTP_OPT_TSF64_TX            (0x10)
 #define CFG_SET_TSF_PTP_OPT_DEFAULT               (0xf)
 #endif
 
@@ -14456,7 +14455,7 @@ enum hdd_external_acs_policy {
  * enable_esp_for_roam - Enable/disable esp feature
  * @Min: 0
  * @Max: 1
- * @Default: 1
+ * @Default: 0
  *
  * This ini is used to enable/disable ESP(Estimated service parameters) IE
  * parsing and decides whether firmware will include this in its scoring algo.
@@ -17232,7 +17231,7 @@ QDF_STATUS hdd_set_idle_ps_config(struct hdd_context *hdd_ctx, bool val);
 void hdd_get_pmkid_modes(struct hdd_context *hdd_ctx,
 			 struct pmkid_mode_bits *pmkid_modes);
 
-int hdd_update_tgt_cfg(hdd_handle_t hdd_handle, struct wma_tgt_cfg *cfg);
+void hdd_update_tgt_cfg(hdd_handle_t hdd_handle, struct wma_tgt_cfg *cfg);
 
 /**
  * hdd_string_to_u8_array() - used to convert decimal string into u8 array

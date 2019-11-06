@@ -1173,6 +1173,9 @@ static void wlan_hdd_sap_pre_cac_success(void *data)
 	 * switch to the pre CAC DFS channel, there is no CAC again.
 	 */
 	wlan_hdd_set_pre_cac_complete_status(ap_adapter, true);
+
+	wlan_hdd_set_sap_csa_reason(hdd_ctx->psoc, ap_adapter->session_id,
+				    CSA_REASON_PRE_CAC_SUCCESS);
 	i = hdd_softap_set_channel_change(ap_adapter->dev,
 			ap_adapter->pre_cac_chan,
 			CH_WIDTH_MAX, false);
@@ -2583,6 +2586,8 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 	case eSAP_ECSA_CHANGE_CHAN_IND:
 		hdd_debug("Channel change indication from peer for channel %d",
 			  pSapEvent->sapevt.sap_chan_cng_ind.new_chan);
+		wlan_hdd_set_sap_csa_reason(hdd_ctx->psoc, adapter->session_id,
+					    CSA_REASON_PEER_ACTION_FRAME);
 		if (hdd_softap_set_channel_change(dev,
 			 pSapEvent->sapevt.sap_chan_cng_ind.new_chan,
 			 CH_WIDTH_MAX, false))
@@ -2854,7 +2859,6 @@ int hdd_softap_set_channel_change(struct net_device *dev, int target_channel,
 	struct hdd_context *hdd_ctx = NULL;
 	struct hdd_adapter *sta_adapter;
 	struct hdd_station_ctx *sta_ctx;
-	bool is_p2p_go_session = false;
 
 	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	ret = wlan_hdd_validate_context(hdd_ctx);
@@ -2951,8 +2955,6 @@ int hdd_softap_set_channel_change(struct net_device *dev, int target_channel,
 	/* Disable Roaming on all adapters before doing channel change */
 	wlan_hdd_disable_roaming(adapter);
 
-	if (wlan_vdev_mlme_get_opmode(adapter->vdev) == QDF_P2P_GO_MODE)
-		is_p2p_go_session = true;
 	/*
 	 * Post the Channel Change request to SAP.
 	 */
@@ -2960,8 +2962,7 @@ int hdd_softap_set_channel_change(struct net_device *dev, int target_channel,
 		WLAN_HDD_GET_SAP_CTX_PTR(adapter),
 		(uint32_t)target_channel,
 		target_bw,
-		(forced && !(hdd_ctx->config->sta_sap_scc_on_lte_coex_chan)) ||
-		 is_p2p_go_session);
+		forced && !(hdd_ctx->config->sta_sap_scc_on_lte_coex_chan));
 
 	if (QDF_STATUS_SUCCESS != status) {
 		hdd_err("SAP set channel failed for channel: %d, bw: %d",
@@ -3034,6 +3035,20 @@ void hdd_sap_restart_chan_switch_cb(struct wlan_objmgr_psoc *psoc,
 	}
 	hdd_sap_restart_with_channel_switch(ap_adapter, channel,
 					    channel_bw, forced);
+}
+
+void wlan_hdd_set_sap_csa_reason(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
+				 uint8_t reason)
+{
+	struct sap_context *sap_ctx;
+	struct hdd_adapter *ap_adapter = wlan_hdd_get_adapter_from_vdev(
+				psoc, vdev_id);
+	if (!ap_adapter) {
+		hdd_err("ap adapter is NULL");
+		return;
+	}
+	sap_ctx = WLAN_HDD_GET_SAP_CTX_PTR(ap_adapter);
+	sap_ctx->csa_reason = reason;
 }
 
 QDF_STATUS wlan_hdd_get_channel_for_sap_restart(
@@ -3132,6 +3147,8 @@ sap_restart:
 		 hdd_ap_ctx->sap_config.channel, intf_ch);
 	ch_params.ch_width = CH_WIDTH_MAX;
 	hdd_ap_ctx->bss_stop_reason = BSS_STOP_DUE_TO_MCC_SCC_SWITCH;
+	hdd_ap_ctx->sap_context->csa_reason =
+			CSA_REASON_CONCURRENT_STA_CHANGED_CHANNEL;
 
 	wlan_reg_set_channel_params(hdd_ctx->pdev,
 				    intf_ch,
@@ -3570,6 +3587,9 @@ static __iw_softap_setparam(struct net_device *dev,
 	case QCSAP_PARAM_SET_CHANNEL_CHANGE:
 		if ((QDF_SAP_MODE == adapter->device_mode) ||
 		   (QDF_P2P_GO_MODE == adapter->device_mode)) {
+			wlan_hdd_set_sap_csa_reason(hdd_ctx->psoc,
+						    adapter->session_id,
+						    CSA_REASON_USER_INITIATED);
 			hdd_debug("SET Channel Change to new channel= %d",
 			       set_value);
 			ret = hdd_softap_set_channel_change(dev, set_value,
@@ -6270,7 +6290,7 @@ const struct net_device_ops net_ops_struct = {
 	.ndo_set_mac_address = hdd_hostapd_set_mac_address,
 	.ndo_do_ioctl = hdd_ioctl,
 	.ndo_change_mtu = hdd_hostapd_change_mtu,
-	.ndo_select_queue = hdd_select_queue,
+	.ndo_select_queue = hdd_hostapd_select_queue,
 };
 
 void hdd_set_ap_ops(struct net_device *dev)
@@ -7830,7 +7850,7 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 
 	hdd_enter();
 
-	hdd_notify_teardown_tdls_links(hdd_ctx->psoc);
+	hdd_notify_teardown_tdls_links(adapter->vdev);
 
 	if (policy_mgr_is_hw_mode_change_in_progress(hdd_ctx->psoc)) {
 		status = policy_mgr_wait_for_connection_update(

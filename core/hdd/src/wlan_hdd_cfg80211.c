@@ -111,7 +111,6 @@
 #include <wlan_cp_stats_mc_ucfg_api.h>
 #include "wlan_hdd_object_manager.h"
 #include "wlan_hdd_coex_config.h"
-#include "wlan_hdd_hw_capability.h"
 
 #define g_mode_rates_size (12)
 #define a_mode_rates_size (8)
@@ -1604,12 +1603,15 @@ int wlan_hdd_sap_cfg_dfs_override(struct hdd_adapter *adapter)
 					con_sap_config->acs_cfg.ch_list_count);
 		if (!sap_config->acs_cfg.ch_list) {
 			hdd_err("ACS config alloc fail");
+			sap_config->acs_cfg.ch_list_count = 0;
 			return -ENOMEM;
 		}
 
 		qdf_mem_copy(sap_config->acs_cfg.ch_list,
 					con_sap_config->acs_cfg.ch_list,
 					con_sap_config->acs_cfg.ch_list_count);
+		sap_config->acs_cfg.ch_list_count =
+				con_sap_config->acs_cfg.ch_list_count;
 
 	} else {
 		sap_config->acs_cfg.pri_ch = con_ch;
@@ -2582,6 +2584,22 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 		}
 		sap_config->acs_cfg.ch_list_count = ch_cnt;
 	}
+
+	ch_cnt = 0;
+	for (i = 0; i < sap_config->acs_cfg.ch_list_count; i++) {
+		if (sap_config->acs_cfg.ch_list[i] >
+				WLAN_REG_CH_NUM(CHAN_ENUM_11) &&
+			sap_config->acs_cfg.ch_list[i] <
+				WLAN_REG_CH_NUM(CHAN_ENUM_36)) {
+			hdd_info("skip channel %d",
+					sap_config->acs_cfg.ch_list[i]);
+			continue;
+		}
+		sap_config->acs_cfg.ch_list[ch_cnt++] =
+			sap_config->acs_cfg.ch_list[i];
+	}
+	sap_config->acs_cfg.ch_list_count = ch_cnt;
+
 	hdd_debug("get pcl for DO_ACS vendor command");
 
 	/* consult policy manager to get PCL */
@@ -2772,9 +2790,11 @@ void wlan_hdd_undo_acs(struct hdd_adapter *adapter)
 	if (adapter == NULL)
 		return;
 	if (adapter->session.ap.sap_config.acs_cfg.ch_list) {
+		hdd_debug("Clear acs cfg channel list");
 		qdf_mem_free(adapter->session.ap.sap_config.acs_cfg.ch_list);
 		adapter->session.ap.sap_config.acs_cfg.ch_list = NULL;
 	}
+	adapter->session.ap.sap_config.acs_cfg.ch_list_count = 0;
 }
 
 /**
@@ -5797,9 +5817,6 @@ __wlan_hdd_cfg80211_get_wifi_info(struct wiphy *wiphy,
 	struct nlattr *tb_vendor[QCA_WLAN_VENDOR_ATTR_WIFI_INFO_GET_MAX + 1];
 	tSirVersionString driver_version;
 	tSirVersionString firmware_version;
-	const char *hw_version;
-	uint32_t major_spid = 0, minor_spid = 0, siid = 0, crmid = 0;
-	uint32_t sub_id = 0;
 	int status;
 	struct sk_buff *reply_skb;
 	uint32_t skb_len = 0, count = 0;
@@ -5833,13 +5850,15 @@ __wlan_hdd_cfg80211_get_wifi_info(struct wiphy *wiphy,
 
 	if (tb_vendor[QCA_WLAN_VENDOR_ATTR_WIFI_INFO_FIRMWARE_VERSION]) {
 		hdd_debug("Rcvd req for FW version");
-		hdd_get_fw_version(hdd_ctx, &major_spid, &minor_spid, &siid,
-				   &crmid);
-		sub_id = (hdd_ctx->target_fw_vers_ext & 0xf0000000) >> 28;
-		hw_version = hdd_ctx->target_hw_name;
 		snprintf(firmware_version, sizeof(firmware_version),
-			"FW:%d.%d.%d.%d.%d HW:%s", major_spid, minor_spid,
-			siid, crmid, sub_id, hw_version);
+			"FW:%d.%d.%d.%d.%d.%d HW:%s",
+			hdd_ctx->fw_version_info.major_spid,
+			hdd_ctx->fw_version_info.minor_spid,
+			hdd_ctx->fw_version_info.siid,
+			hdd_ctx->fw_version_info.rel_id,
+			hdd_ctx->fw_version_info.crmid,
+			hdd_ctx->fw_version_info.sub_id,
+			hdd_ctx->target_hw_name);
 		skb_len += strlen(firmware_version) + 1;
 		count++;
 	}
@@ -11303,6 +11322,8 @@ static int hdd_update_acs_channel(struct hdd_adapter *adapter, uint8_t reason,
 		sap_config->acs_cfg.ch_width = channel_list->chan_width;
 		hdd_ap_ctx->sap_config.ch_width_orig =
 				channel_list->chan_width;
+		wlan_hdd_set_sap_csa_reason(hdd_ctx->psoc, adapter->session_id,
+					    CSA_REASON_LTE_COEX);
 		hdd_switch_sap_channel(adapter, sap_config->acs_cfg.pri_ch,
 				       true);
 		break;
@@ -15069,7 +15090,6 @@ const struct wiphy_vendor_command hdd_wiphy_vendor_commands[] = {
 
 	FEATURE_COEX_CONFIG_COMMANDS
 	FEATURE_MPTA_HELPER_COMMANDS
-	FEATURE_HW_CAPABILITY_COMMANDS
 };
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0)
@@ -15697,7 +15717,6 @@ int wlan_hdd_cfg80211_init(struct device *dev,
 #endif
 	wiphy->features |= NL80211_FEATURE_INACTIVITY_TIMER;
 
-	wiphy->features |= NL80211_FEATURE_VIF_TXPOWER;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)) || \
 	defined(CFG80211_BEACON_TX_RATE_CUSTOM_BACKPORT)
 	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_BEACON_RATE_LEGACY);
@@ -18008,6 +18027,9 @@ bool wlan_hdd_handle_sap_sta_dfs_conc(struct hdd_adapter *adapter,
 
 	hostapd_state = WLAN_HDD_GET_HOSTAP_STATE_PTR(ap_adapter);
 	qdf_event_reset(&hostapd_state->qdf_event);
+	wlan_hdd_set_sap_csa_reason(hdd_ctx->psoc, ap_adapter->session_id,
+				    CSA_REASON_STA_CONNECT_DFS_TO_NON_DFS);
+
 	status = wlansap_set_channel_change_with_csa(
 			WLAN_HDD_GET_SAP_CTX_PTR(ap_adapter), channel,
 			hdd_ap_ctx->sap_config.ch_width_orig, false);
@@ -18122,7 +18144,7 @@ static int wlan_hdd_cfg80211_connect_start(struct hdd_adapter *adapter,
 	/* Disable roaming on all other adapters before connect start */
 	wlan_hdd_disable_roaming(adapter);
 
-	hdd_notify_teardown_tdls_links(hdd_ctx->psoc);
+	hdd_notify_teardown_tdls_links(adapter->vdev);
 
 	qdf_mem_zero(&hdd_sta_ctx->conn_info.conn_flag,
 		     sizeof(hdd_sta_ctx->conn_info.conn_flag));
@@ -22322,6 +22344,8 @@ static int __wlan_hdd_cfg80211_channel_switch(struct wiphy *wiphy,
 	if ((QDF_P2P_GO_MODE != adapter->device_mode) &&
 		(QDF_SAP_MODE != adapter->device_mode))
 		return -ENOTSUPP;
+	wlan_hdd_set_sap_csa_reason(hdd_ctx->psoc, adapter->session_id,
+				    CSA_REASON_USER_INITIATED);
 
 	freq = csa_params->chandef.chan->center_freq;
 	channel = cds_freq_to_chan(freq);

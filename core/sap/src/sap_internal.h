@@ -159,6 +159,7 @@ struct sap_context {
 	 * track of state machine
 	 */
 	enum sap_fsm_state fsm_state;
+	enum sap_csa_reason_code csa_reason;
 
 	/* Actual storage for AP and self (STA) SSID */
 	tCsrSSIDInfo SSIDList[2];
@@ -335,11 +336,6 @@ sap_print_acl(struct qdf_mac_addr *macList, uint8_t size);
 bool
 sap_search_mac_list(struct qdf_mac_addr *macList, uint8_t num_mac,
 		 uint8_t *peerMac, uint8_t *index);
-
-#ifdef FEATURE_WLAN_CH_AVOID
-void sap_update_unsafe_channel_list(tHalHandle hal,
-				    struct sap_context *sap_ctx);
-#endif /* FEATURE_WLAN_CH_AVOID */
 
 QDF_STATUS sap_init_dfs_channel_nol_list(struct sap_context *sapContext);
 

@@ -126,7 +126,7 @@ struct hdd_apf_context {
 #endif /* FEATURE_WLAN_APF */
 
 /** Number of Tx Queues */
-#if defined(QCA_LL_TX_FLOW_CONTROL_V2) || defined(QCA_LL_PDEV_TX_FLOW_CONTROL)
+#ifdef QCA_LL_TX_FLOW_CONTROL_V2
 #define NUM_TX_QUEUES 5
 #else
 #define NUM_TX_QUEUES 4
@@ -248,8 +248,6 @@ enum hdd_driver_flags {
 #define WLAN_WAIT_TIME_APF     1000
 
 #define WLAN_WAIT_TIME_FW_ROAM_STATS 1000
-
-#define WLAN_WAIT_TIME_ANTENNA_ISOLATION 8000
 
 /* Maximum time(ms) to wait for RSO CMD status event */
 #define WAIT_TIME_RSO_CMD_STATUS 2000
@@ -536,9 +534,6 @@ struct hdd_tx_rx_stats {
 	__u32 rx_delivered[NUM_CPUS];
 	__u32 rx_refused[NUM_CPUS];
 	qdf_atomic_t rx_usolict_arp_n_mcast_drp;
-	/* rx gro */
-	__u32 rx_aggregated;
-	__u32 rx_non_aggregated;
 
 	/* txflow stats */
 	bool     is_txflow_paused;
@@ -1362,8 +1357,6 @@ struct hdd_adapter {
 	uint64_t cur_target_time;
 	uint64_t cur_tsf_sync_soc_time;
 	uint64_t last_tsf_sync_soc_time;
-	uint64_t cur_target_global_tsf_time;
-	uint64_t last_target_global_tsf_time;
 	qdf_mc_timer_t host_capture_req_timer;
 #ifdef WLAN_FEATURE_TSF_PLUS
 	/* spin lock for read/write timestamps */
@@ -1754,6 +1747,25 @@ struct hdd_dynamic_mac {
 };
 
 /**
+ * hdd_fw_ver_info - FW version info structure
+ * @major_spid: FW version - major spid.
+ * @minor_spid: FW version - minor spid
+ * @siid:       FW version - siid
+ * @sub_id:     FW version - sub id
+ * @rel_id:     FW version - release id
+ * @crmid:      FW version - crmid
+ */
+
+struct hdd_fw_ver_info {
+	uint32_t major_spid;
+	uint32_t minor_spid;
+	uint32_t siid;
+	uint32_t sub_id;
+	uint32_t rel_id;
+	uint32_t crmid;
+};
+
+/**
  * struct hdd_context - hdd shared driver and psoc/device context
  * @psoc: object manager psoc context
  * @pdev: object manager pdev context
@@ -2044,6 +2056,7 @@ struct hdd_context {
 	unsigned long derived_intf_addr_mask;
 	struct wlan_mlme_chain_cfg fw_chain_cfg;
 	struct sar_limit_cmd_params *sar_cmd_params;
+	struct hdd_fw_ver_info fw_version_info;
 };
 
 /**
@@ -2548,12 +2561,9 @@ static inline bool hdd_scan_random_mac_addr_supported(void)
  */
 int hdd_start_vendor_acs(struct hdd_adapter *adapter);
 
-void hdd_get_fw_version(struct hdd_context *hdd_ctx,
-			uint32_t *major_spid, uint32_t *minor_spid,
-			uint32_t *siid, uint32_t *crmid);
 /**
  * hdd_acs_response_timeout_handler() - timeout handler for acs_timer
- * @context : timeout handler context
+ * @context: timeout handler context
  *
  * Return: None
  */
@@ -3363,7 +3373,7 @@ int hdd_set_limit_off_chan_for_tos(struct hdd_adapter *adapter, enum tos tos,
  *
  * Return: None
  */
-void hdd_drv_ops_inactivity_handler(void);
+void hdd_drv_ops_inactivity_handler(void *);
 
 /**
  * hdd_start_driver_ops_timer() - Starts driver ops inactivity timer

@@ -358,8 +358,6 @@
 #define WMA_GET_PEER_INFO          SIR_HAL_GET_PEER_INFO
 #define WMA_GET_PEER_INFO_EXT      SIR_HAL_GET_PEER_INFO_EXT
 
-#define WMA_GET_ISOLATION          SIR_HAL_GET_ISOLATION
-
 #define WMA_MODEM_POWER_STATE_IND SIR_HAL_MODEM_POWER_STATE_IND
 
 #ifdef WLAN_FEATURE_STATS_EXT
@@ -621,7 +619,7 @@ typedef QDF_STATUS (*wma_tx_ota_comp_callback)(void *context, qdf_nbuf_t buf,
 typedef void (*wma_txFailIndCallback)(uint8_t *, uint8_t);
 
 /* generic callback for updating parameters from target to HDD */
-typedef int (*wma_tgt_cfg_cb)(hdd_handle_t handle, struct wma_tgt_cfg *cfg);
+typedef void (*wma_tgt_cfg_cb)(hdd_handle_t handle, struct wma_tgt_cfg *cfg);
 
 /**
  * struct wma_cli_set_cmd_t - set command parameters
