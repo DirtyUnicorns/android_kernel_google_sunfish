@@ -3273,7 +3273,7 @@ static int drm_panel_get_timings(struct drm_panel *panel,
 	if (timings)
 		for (i = 0; i < num_timings; i++) {
 			struct display_timing *t = &timings[i];
-			struct dsi_display_mode m = {0};
+			struct dsi_display_mode m;
 
 			rc = dsi_panel_get_mode(p, i, &m, -1);
 			if (rc)
