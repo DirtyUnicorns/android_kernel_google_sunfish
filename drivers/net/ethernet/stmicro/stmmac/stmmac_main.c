@@ -859,22 +859,6 @@ static void stmmac_adjust_link(struct net_device *dev)
 
 	mutex_unlock(&priv->lock);
 
-	if (new_state) {
-		if (phydev->link == 1 && priv->tx_queue[IPA_DMA_TX_CH].skip_sw)
-			ethqos_ipa_offload_event_handler(priv,
-							 EV_PHY_LINK_UP);
-		else if (phydev->link == 0 &&
-			 priv->tx_queue[IPA_DMA_TX_CH].skip_sw)
-			ethqos_ipa_offload_event_handler(priv,
-							 EV_PHY_LINK_DOWN);
-	}
-#ifdef CONFIG_MSM_BOOT_TIME_MARKER
-if (phydev->link == 1 && !priv->boot_kpi) {
-	place_marker("M - Ethernet is Ready.Link is UP");
-	priv->boot_kpi = true;
-}
-#endif
-
 	if (phydev->is_pseudo_fixed_link)
 		/* Stop PHY layer to call the hook to adjust the link in case
 		 * of a switch is attached to the stmmac driver.
