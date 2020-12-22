@@ -3470,7 +3470,7 @@ static int clk_debug_create_one(struct clk_core *core, struct dentry *pdentry)
 		goto err_out;
 
 	d = debugfs_create_ulong("clk_accuracy", 0444, core->dentry,
-			&core->accuracy);
+					 &core->accuracy);
 	if (!d)
 		goto err_out;
 
