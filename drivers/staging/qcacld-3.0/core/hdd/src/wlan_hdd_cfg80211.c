@@ -2653,11 +2653,9 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 							    PM_STA_MODE);
 	if ((hdd_ctx->config->external_acs_policy ==
 	    HDD_EXTERNAL_ACS_PCL_MANDATORY) && conc_channel) {
-		if ((conc_channel >= WLAN_REG_CH_NUM(CHAN_ENUM_36) &&
-		     sap_config->acs_cfg.band == QCA_ACS_MODE_IEEE80211A) ||
-		     (conc_channel <= WLAN_REG_CH_NUM(CHAN_ENUM_14) &&
+		if ((conc_channel <= WLAN_REG_CH_NUM(CHAN_ENUM_14)) &&
 		      (sap_config->acs_cfg.band == QCA_ACS_MODE_IEEE80211B ||
-		       sap_config->acs_cfg.band == QCA_ACS_MODE_IEEE80211G))) {
+		       sap_config->acs_cfg.band == QCA_ACS_MODE_IEEE80211G)) {
 			sap_config->acs_cfg.pri_ch = conc_channel;
 			wlan_sap_set_sap_ctx_acs_cfg(
 				WLAN_HDD_GET_SAP_CTX_PTR(adapter), sap_config);
@@ -2912,7 +2910,7 @@ void wlan_hdd_cfg80211_acs_ch_select_evt(struct hdd_adapter *adapter)
 		INIT_DELAYED_WORK(&con_sap_adapter->acs_pending_work,
 				      wlan_hdd_cfg80211_start_pending_acs);
 		/* Lets give 1500ms for OBSS + START_BSS to complete */
-		queue_delayed_work(system_power_efficient_wq, &con_sap_adapter->acs_pending_work,
+		schedule_delayed_work(&con_sap_adapter->acs_pending_work,
 					msecs_to_jiffies(1500));
 	}
 }
